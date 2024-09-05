@@ -3,7 +3,6 @@ import torch
 import torch.utils.data as torchdata
 import torch.nn.functional as F
 import tqdm
-import wandb
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
@@ -72,10 +71,7 @@ alpha = 0.7
 def test(eta):
     total_val_loss = 0.0
     total_mask_loss = 0.0
-    psnr_fuse, ssim_fuse = 0.0, 0.0
-    psnr_fuse_err, ssim_fuse_err = 0.0, 0.0
-    psnr_fuse_unc, ssim_fuse_unc = 0.0, 0.0
-    psnr_fuse_auto, ssim_fuse_auto = 0.0, 0.0
+    psnr_fuse_auto = 0.0
     
     # for visualization
     outdir = 'visualization/'
@@ -123,9 +119,6 @@ def test(eta):
             laplac = cv2.Laplacian(gray, cv2.CV_16S, ksize=3)
             imscore = cv2.convertScaleAbs(laplac).mean()
             
-            real_and_preds['imscore'].append(imscore)
-            # current_imscore.append(imscore)
-            
             img = torch.from_numpy(img).permute(2,0,1).unsqueeze(0)
             
             gt = hr_img.astype(np.float32) 
@@ -139,12 +132,10 @@ def test(eta):
             
                 combine_img_lists.append(out[0].cpu().permute(1,2,0).numpy())
                 fusion_outputs.append(out[0].cpu())
-                # combine_unc_lists[i].append(p_masks[:, i].cpu())
-            
-        # masks = [p_masks[:, i].detach() for i in range(p_masks.shape[1])]
+                
         yf = torch.from_numpy(utils.combine(combine_img_lists, num_h, num_w, h, w, patch_size, step, args.scale)).permute(2,0,1).unsqueeze(0)
             
-        psnr, ssim = evaluation.calculate_all(args, yf, yt)
+        psnr, _ = evaluation.calculate_all(args, yf, yt)
         
         patch_psnr_1_img = list()
         for patch_f, patch_t in zip(fusion_outputs, hr_list):
@@ -155,7 +146,6 @@ def test(eta):
         test_patch_psnrs += patch_psnr_1_img
         
         psnr_fuse_auto += psnr
-        ssim_fuse_auto += ssim
     
     percent = np.array(core.counts) / np.sum(core.counts)
     
@@ -164,12 +154,10 @@ def test(eta):
     print(f"Percent FLOPS: {auto_flops} - {summary_percent}")
     
     psnr_fuse_auto /= len(XYtest)
-    ssim_fuse_auto /= len(XYtest)
     
     print("Avg patch PSNR: ", np.mean(np.array(test_patch_psnrs)))
     
     print("fusion auto psnr: ", psnr_fuse_auto)
-    print("fusion auto ssim: ", ssim_fuse_auto)
     print("Sampling patches rate:")
     for perc in percent:
         print( f"{(perc*100):.3f}", end=' ')
