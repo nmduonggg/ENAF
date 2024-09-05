@@ -1,0 +1,12 @@
+python test_eunaf.py \
+    --template EUNAF_CARNxN \
+    --testset_tag Set14RGB \
+    --N 14 \
+    --testset_dir ../../data/ \
+    --train_stage 2 \
+    --n_resblocks 16 \
+    --n_estimators 4 \
+    --scale 4 \
+    --eval_tag ssim \
+    --visualize \
+    --rgb_channel \
