@@ -51,114 +51,18 @@ arch = args.core.split("-")
 name = args.template
 core = supernet.config(args)
 if args.weight:
-    fname = name + f"_x{args.scale}_nb{args.n_resblocks}_nf{args.n_feats}_ng{args.n_resgroups}_st{args.train_stage}" if args.n_resgroups > 0 \
-        else name + f"_x{args.scale}_nb{args.n_resblocks}_nf{args.n_feats}_st{args.train_stage}"
-    out_dir = os.path.join(args.cv_dir, 'jointly_nofreeze', 'Error-predict', '1est', fname)
-    args.weight = os.path.join(out_dir, '_best.t7')
     print(f"[INFO] Load weight from {args.weight}")
     core.load_state_dict(torch.load(args.weight), strict=True)
 core.cuda()
-
 loss_func = loss.create_loss_func(args.loss)
-
-# working dir
-# out_dir = os.path.join(args.analyze_dir, args.template, name+f'_nblock{args.nblocks}', args.testset_tag)
-out_dir = os.path.join(args.analyze_dir, "by_patches", name+f'_x{args.scale}_nb{args.n_resblocks}_nf{args.n_feats}_st{args.train_stage}', args.testset_tag)
-print('Load to: ', out_dir)
-if not os.path.exists(out_dir):
-    os.makedirs(out_dir)
     
 def gray2heatmap(image):
     heatmap = cv2.applyColorMap(image, cv2.COLORMAP_JET)
     
     return heatmap
-
-def fuse_classified_patch_level(p_yfs, p_masks, im_idx, eta, visualize=False, imscore=None):
-    # p_yfs, p_masks: all patches of yfs and masks of all num block stages [[HxWxC]*n_patches]xnum_blocks
-    yfs = [np.stack(pm, axis=0) for pm in p_yfs]  # PxHxWxC
-    masks = [np.concatenate(pm, axis=0) for pm in p_masks] # Bx3
-    per_class = 0
-    if imscore is not None:
-        imscores = np.array(imscore) # N
-        q1, q2, q3 = np.percentile(imscore, [25, 50, 75])
-        
-        q1 = 10
-        p0 = (imscores <= q1).astype(int)
-        p1 = (np.logical_and(q1 < imscores, imscores <= q2)).astype(int)
-        p2 = (np.logical_and(q2 < imscores, imscores <= q3)).astype(int)
-        p3 = (q3 < imscores).astype(int)
-        
-        per_class = torch.tensor(np.stack([p0*1.2, p1*0.00, p2*0.00, p3*0.00], axis=-1))   # PxN
-    
-    costs = np.array(cost_ees)
-    costs = (costs - costs.min()) / (costs.max() - costs.min())
-    # costs = costs / costs.max()
-    # normalized_masks = np.stack(masks, axis=-1) 
-    
-    normalized_masks = np.stack(masks, axis=1) 
-    # normalized_masks = (normalized_masks - np.min(normalized_masks, axis=-1, keepdims=True)) / (np.max(normalized_masks, axis=-1, keepdims=True) - np.min(normalized_masks, axis=-1, keepdims=True))
-    normalized_masks = normalized_masks + eta*costs.reshape(1, -1)
-    masks = [
-        normalized_masks[:, i] for i in range(len(yfs)) # PxN
-    ]
-    
-    all_masks = torch.tensor(np.stack(masks, axis=-1)) # P -> PxN
-    
-    all_masks -= per_class
-    
-    raw_indices = torch.argmin(all_masks, dim=-1)    # 0->N-1, P
-    onehot_indices = F.one_hot(raw_indices, num_classes=len(masks)).float() # PxN
-    
-    processed_outs = 0
-    
-    percents = list()
-    for i in range(len(p_masks)):
-        fout = yfs[i] 
-        cur_mask = onehot_indices[..., i].numpy().astype(np.uint8)
-        percents.append(cur_mask.mean())
-        cur_mask = cur_mask.reshape(-1, 1, 1, 1)
-        
-        cur_fout = (fout*cur_mask)
-        processed_outs += cur_fout
-    
-    fused_classified = [processed_outs[i,...] for i in range(processed_outs.shape[0])]
-    
-    if visualize:
-        class_colors = [
-            [0, 0, 255],    # blue
-            [19, 239, 85],  # green
-            [235, 255, 128],    # yellow
-            [255, 0, 0] # red
-        ]
-    
-        processed_colors = 0
-        
-        for i in range(len(p_masks)):
-            fout = np.array(class_colors[i]).reshape(1, 1, 1, -1)   # BCHW
-            fout = fout * np.ones_like(yfs[i])
-            fout[:, :1, :, :] = 0
-            fout[:, -1:, :, :] = 0
-            fout[:, :, :1, :] = 0
-            fout[:, :, -1:, :] = 0
-            
-            cur_mask = onehot_indices[..., i].numpy().astype(np.uint8)
-            cur_mask = cur_mask.reshape(-1, 1, 1, 1)
-            cur_fout = fout * cur_mask
-            
-            processed_colors += cur_fout
-        
-        fused_colors = [processed_colors[i,...] for i in range(processed_colors.shape[0])]
-        
-        return fused_classified, percents, fused_colors
-            
-    return fused_classified, percents
         
 # testing
-
 t = 5e-3
-psnr_unc_map = np.ones((len(XYtest), 12))
-num_blocks = args.n_resgroups // 2 if args.n_resgroups > 0 else args.n_resblocks // 2 
-num_blocks = min(args.n_estimators, num_blocks)
 num_blocks = 4
 
 patch_size = 32
@@ -166,9 +70,6 @@ step = 28
 alpha = 0.7
 
 def test(eta):
-    psnrs_val = [0 for _ in range(num_blocks)]
-    ssims_val = [0 for _ in range(num_blocks)]
-    uncertainty_val = [0 for _ in range(num_blocks)]
     total_val_loss = 0.0
     total_mask_loss = 0.0
     psnr_fuse, ssim_fuse = 0.0, 0.0
@@ -186,18 +87,8 @@ def test(eta):
     for m in core.modules():
         if hasattr(m, '_prepare'):
             m._prepare()
-            
-    percent_total = np.zeros(shape=[num_blocks])
-    percent_total_err = np.zeros(shape=[num_blocks])
-    percent_total_auto = np.zeros(shape=[num_blocks])
     
     test_patch_psnrs = list()
-    
-    real_and_preds = {
-        'imscore': [],
-        'pred_0': [], 'pred_1': [],'pred_2': [], 'pred_3': [],
-        'real_0': [], 'real_1': [],'real_2': [], 'real_3': []
-    }
     
     cnt = 0
     for batch_idx, (x, yt) in tqdm.tqdm(enumerate(XYtest), total=len(XYtest)):
@@ -255,15 +146,6 @@ def test(eta):
             
         psnr, ssim = evaluation.calculate_all(args, yf, yt)
         
-        #### FUSION START HERE ####
-        visualize = False
-        # fusion_outputs = fuse_classified_patch_level(combine_img_lists, combine_unc_lists, batch_idx, eta, visualize=visualize, imscore=current_imscore)
-        
-        # if len(fusion_outputs) == 2:
-        #     fused_auto_patches, percents_auto = fusion_outputs
-        # else:
-        #     fused_auto_patches, percents_auto, fused_color_map = fusion_outputs
-        
         patch_psnr_1_img = list()
         for patch_f, patch_t in zip(fusion_outputs, hr_list):
             patch_t = torch.tensor(patch_t).permute(2,0,1).unsqueeze(0) 
@@ -292,7 +174,7 @@ def test(eta):
     for perc in percent:
         print( f"{(perc*100):.3f}", end=' ')
     
-    return real_and_preds, auto_flops, psnr_fuse_auto
+    return auto_flops, psnr_fuse_auto
     
 if __name__ == '__main__':
     # get 1 patch flops
@@ -300,8 +182,9 @@ if __name__ == '__main__':
     
     etas, flops, psnrs = [], [], []
     for eta in np.linspace(0.15, 5.0, 15):
+        
         print("="*20, f"eta = {eta}", "="*20)
-        real_and_preds, auto_flops, psnr_fuse_auto = test(eta)
+        auto_flops, psnr_fuse_auto = test(eta)
         etas.append(eta)
         flops.append(auto_flops) #
         psnrs.append(psnr_fuse_auto)

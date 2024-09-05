@@ -1,4 +1,4 @@
-python test_eunaf_by_patches_1est.py \
+python infer_eunaf.py \
     --template EUNAF_CARNxN_1est \
     --testset_tag Test4K \
     --N 100 \

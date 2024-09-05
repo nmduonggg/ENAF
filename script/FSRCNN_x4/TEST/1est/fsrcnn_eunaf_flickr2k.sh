@@ -1,4 +1,4 @@
-python test_eunaf_by_patches_1est_parallel.py \
+python infer_eunaf.py \
     --template EUNAF_FSRCNNxN_1est \
     --testset_tag Flickr2K \
     --N 100 \
