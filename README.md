@@ -3,8 +3,8 @@
 This is the sample source code provided for WACV 2025 submission: "ENAF: A Multi-Exit Network with an Adaptive Patch Fusion
 for Large Image Super Resolution". 
 
-### Download and load weights:
-- Will be available
+### Pretrained weights:
+- Weights are stored in [weights](./weights)
 
 ### Adjust configuration
 - Adjust configuration and weight path in folder [template](./template/)
