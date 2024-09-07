@@ -4,8 +4,7 @@ This is the sample source code provided for WACV 2025 submission: "ENAF: A Multi
 for Large Image Super Resolution". 
 
 ### Download and load weights:
-- Download weights from : [pretrained](https://drive.google.com/drive/folders/1AiKOIzCIponhs3vFvB981xerOd3t6WDO?usp=sharing)
-- Move them to folder [weights](./weights/)
+- Will be available
 
 ### Adjust configuration
 - Adjust configuration and weight path in folder [template](./template/)

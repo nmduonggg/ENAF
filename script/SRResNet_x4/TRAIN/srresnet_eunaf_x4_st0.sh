@@ -10,5 +10,4 @@ python train_eunaf.py \
     --n_estimators 3 \
     --trainset_preload 200 \
     --rgb_channel \
-    --weight '/mnt/disk1/nmduong/FusionNet/Supernet-SR/src/checkpoints/EUNAF_EDSRx2_bl_x2_nb4_nf64_st0/_best.t7' \
     # --wandb \``
